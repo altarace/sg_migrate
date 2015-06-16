@@ -15,7 +15,7 @@ Options:
         Default:us-east-1
 
     -d, --destination=VPC_ID
-        The destination VPC_ID into which the security groups will be created'
+        The destination VPC_ID into which the security groups will be created
 
     -r, --destinationregion=region_id
         The region in which security groups will be created in
@@ -52,16 +52,6 @@ class sgh:
         elif self.dep_list:
             for item in self.dep_list:
                 retval = item.search(searchid)
-                if retval is not None:
-                    break
-        return retval
-    def searchnew(self, searchid):
-        retval = None
-        if self.newsgID == searchid:
-            retval = self
-        elif self.dep_list:
-            for item in self.dep_list:
-                retval = item.searchnew(searchid)
                 if retval is not None:
                     break
         return retval
@@ -102,7 +92,7 @@ def migrate_sg(source, soureceregion, dest, desregion,overwrite, test):
         for rule in sg.rules:
                     for parents in rule.grants:
                             for sgname in source_security_groups:
-                                if sgname.name == parents.name: #if parents.name in source_security_groups:
+                                if sgname.name == parents.name:
                                     if parents.name != sg.name:
                                         foundParent = True
                                         found_id = None
@@ -132,7 +122,6 @@ def migrate_sg(source, soureceregion, dest, desregion,overwrite, test):
 
     #print >>sys.stderr, repr(sg_trees)
     assert sg_trees is not None, "No SG dependency tree"
-    #while sg_trees:
     new_conn = boto.ec2.connect_to_region(desregion)
     for sgs in sg_trees:
         if sgs.name != 'default':
@@ -145,7 +134,7 @@ def create_new_sg(sg_def, destregion, dest, orig_trees,new_conn):
     except boto.exception.BotoServerError as e:
         if (e.status == 400 and e.error_code == 'InvalidGroup.Duplicate'):
             for item in sg_def.dep_list:
-                create_new_sg(item, destregion, dest, orig_trees,new_conn)
+                create_new_sg(item, destregion, dest, orig_trees,new_conn) #TODO test this code path
         else:
             print >>sys.stderr, e
         return
@@ -227,7 +216,6 @@ if __name__ == "__main__":
             raise Usage("invalid number of arguments")
         if destination is None:
             raise Usage("must specify vpc id as destination")
-        # Doit
         migrate_sg(source,sourceregion,destination, destregion,overwrite, dryrun)
 
     except Usage, err:
