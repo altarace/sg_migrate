@@ -30,3 +30,11 @@ Options:
     -o, --overwrite (not yet implemented)
         Overwrite existing security groups with the same name in the destination vpc
         Default:false
+        
+        
+    TODO:
+    * make code less "javay" and more "pythony"
+    * implement overwrite
+    * implement dry-run
+    * add prefix to new SG names (e.g. dev-, qa-)
+    * different source/target accounts
