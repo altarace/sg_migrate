@@ -34,6 +34,7 @@ Options:
         
     TODO:
     * make code less "javay" and more "pythony"
+    * add source SG filter option
     * implement overwrite
     * implement dry-run
     * add prefix to new SG names (e.g. dev-, qa-)
