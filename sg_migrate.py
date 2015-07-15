@@ -6,7 +6,8 @@ Usage:
 Options:
     -h, --help
         Print this help information
-
+    -p, --profile
+        A credential profile name (defined in $HOME/.aws/credentials
     -s, --source=VPC_ID/"classic"
         The source from which to copy security groups "classic" for classic or VPC_ID for a VPC
         Default:"classic"
@@ -36,6 +37,7 @@ import sys
 from collections import defaultdict
 import getopt
 import json
+import time
 
 class sgh:
     def __init__(self, id, name, origsg):
@@ -71,10 +73,10 @@ class missing:
     def __repr__(self):
         return self.__str__()
 
-def migrate_sg(source, soureceregion, dest, desregion,overwrite, test):
+def migrate_sg(source, soureceregion, dest, desregion,overwrite,profile,test):
     #print >>sys.stderr, source, soureceregion, dest, desregion, overwrite, test
     #boto.set_stream_logger('boto')
-    conn = boto.ec2.connect_to_region(sourceregion)
+    conn = boto.ec2.connect_to_region(sourceregion,profile_name=profile)
     sourcefilter = None
     source_security_groups = None
     if source is not "classic":
@@ -122,7 +124,7 @@ def migrate_sg(source, soureceregion, dest, desregion,overwrite, test):
 
     #print >>sys.stderr, repr(sg_trees)
     assert sg_trees is not None, "No SG dependency tree"
-    new_conn = boto.ec2.connect_to_region(desregion)
+    new_conn = boto.ec2.connect_to_region(desregion,profile_name=profile)
     for sgs in sg_trees:
         if sgs.name != 'default':
             create_new_sg(sgs, desregion,dest,sg_trees,new_conn)
@@ -130,7 +132,12 @@ def migrate_sg(source, soureceregion, dest, desregion,overwrite, test):
 
 def create_new_sg(sg_def, destregion, dest, orig_trees,new_conn):
     try:
-        new_sg = new_conn.create_security_group(sg_def.sg.name, sg_def.sg.description, dest)
+        new_name = sg_def.sg.name
+        new_desc = sg_def.sg.description
+        #new_name = new_name.replace('production', 'qa')
+        #new_desc = new_desc.replace('PROD', 'QA')
+        new_sg = new_conn.create_security_group(new_name, new_desc, dest)
+        time.sleep(2) #crude security group eventual consistency handling bump this up if you get InvalidGroup.NotFound error
     except boto.exception.BotoServerError as e:
         if (e.status == 400 and e.error_code == 'InvalidGroup.Duplicate'):
             for item in sg_def.dep_list:
@@ -140,6 +147,11 @@ def create_new_sg(sg_def, destregion, dest, orig_trees,new_conn):
         return
     sg_def.newsg = new_sg
     sg_def.newsgID = new_sg.id
+    if 'Name' in sg_def.sg.tags:
+        new_name_tag = sg_def.sg.tags['Name']
+        #new_name_tag = new_name_tag.replace('PROD','QA')
+        #new_name_tag = new_name_tag.replace('production','qa')
+        new_sg.add_tag("Name",new_name_tag)
     for rules in sg_def.sg.rules:
         for grant in rules.grants:
             params = {
@@ -179,7 +191,7 @@ class Usage(Exception):
 if __name__ == "__main__":
     try:
         try:
-            opts, args = getopt.getopt(sys.argv[1:], 's:d:u:r:xoh', ["source=","destination=","dryrun","overwrite","sourceregion=","destinationregion=","help"])
+            opts, args = getopt.getopt(sys.argv[1:], 's:d:u:r:p:xoh', ["source=","destination=","dryrun","overwrite","sourceregion=","destinationregion=","profile=","help"])
         except getopt.error, msg:
              raise Usage(msg)
 
@@ -187,6 +199,7 @@ if __name__ == "__main__":
         source="classic"
         sourceregion = "us-east-1"
         destregion = "us-east-1"
+        profile = None
         destination = None
         overwrite = False
         dryrun = False
@@ -203,6 +216,8 @@ if __name__ == "__main__":
                 destination = value
             elif option in ("-r", "--destinationregion"):
                 destregion = value
+            elif option in ("-p", "--profile"):
+                profile = value
             elif option in ("-x", "--dryrun"):
                 dryrun = True
             elif option in ("-o", "--overwrite"):
@@ -216,7 +231,7 @@ if __name__ == "__main__":
             raise Usage("invalid number of arguments")
         if destination is None:
             raise Usage("must specify vpc id as destination")
-        migrate_sg(source,sourceregion,destination, destregion,overwrite, dryrun)
+        migrate_sg(source,sourceregion,destination, destregion,overwrite,profile,dryrun)
 
     except Usage, err:
         print >>sys.stderr, err.msg
