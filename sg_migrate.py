@@ -94,8 +94,8 @@ def migrate_sg(source, soureceregion, dest, desregion,overwrite,profile,test):
         for rule in sg.rules:
                     for parents in rule.grants:
                             for sgname in source_security_groups:
-                                if sgname.name == parents.name:
-                                    if parents.name != sg.name:
+                                if sgname.id == parents.group_id:
+                                    if parents.group_id != sg.id:
                                         foundParent = True
                                         found_id = None
                                         for sg_review in sg_trees:
@@ -134,23 +134,25 @@ def create_new_sg(sg_def, destregion, dest, orig_trees,new_conn):
     try:
         new_name = sg_def.sg.name
         new_desc = sg_def.sg.description
-        #new_name = new_name.replace('production', 'qa')
-        #new_desc = new_desc.replace('PROD', 'QA')
+        # new_name = new_name.replace('development', 'qa')
+        # new_desc = new_desc.replace('DEV', 'QA')
         new_sg = new_conn.create_security_group(new_name, new_desc, dest)
         time.sleep(2) #crude security group eventual consistency handling bump this up if you get InvalidGroup.NotFound error
     except boto.exception.BotoServerError as e:
         if (e.status == 400 and e.error_code == 'InvalidGroup.Duplicate'):
-            for item in sg_def.dep_list:
-                create_new_sg(item, destregion, dest, orig_trees,new_conn) #TODO test this code path
+            sourcefilter = {'vpc-id': dest, 'group-name': new_name}
+            existing_sgs = new_conn.get_all_security_groups(filters=sourcefilter)
+            new_sg = existing_sgs[0]
+            #for item in sg_def.dep_list:
+                #create_new_sg(item, destregion, dest, orig_trees,new_conn) #TODO test this code path
         else:
             print >>sys.stderr, e
-        return
+            return
     sg_def.newsg = new_sg
     sg_def.newsgID = new_sg.id
     if 'Name' in sg_def.sg.tags:
         new_name_tag = sg_def.sg.tags['Name']
-        #new_name_tag = new_name_tag.replace('PROD','QA')
-        #new_name_tag = new_name_tag.replace('production','qa')
+        # new_name_tag = new_name_tag.replace('DEV','QA')
         new_sg.add_tag("Name",new_name_tag)
     for rules in sg_def.sg.rules:
         for grant in rules.grants:
@@ -174,7 +176,11 @@ def create_new_sg(sg_def, destregion, dest, orig_trees,new_conn):
 
             except AttributeError:
                 params['cidr_ip'] = grant.cidr_ip
-            new_sg.authorize(**params)
+            try:
+                new_sg.authorize(**params)
+            except boto.exception.BotoServerError as e:
+                if (e.status == 400 and e.error_code == 'InvalidPermission.Duplicate'):
+                    continue
 
     for item in sg_def.dep_list:
         create_new_sg(item, destregion, dest, orig_trees,new_conn)
