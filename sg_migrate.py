@@ -7,7 +7,11 @@ Options:
     -h, --help
         Print this help information
     -p, --profile
-        A credential profile name (defined in $HOME/.aws/credentials
+        A credential profile name (defined in $HOME/.aws/credentials)
+
+    -t, --target-profile
+        A target profile if needing to copy SGs to another AWS account
+
     -s, --source=VPC_ID/"classic"
         The source from which to copy security groups "classic" for classic or VPC_ID for a VPC
         Default:"classic"
@@ -73,7 +77,7 @@ class missing:
     def __repr__(self):
         return self.__str__()
 
-def migrate_sg(source, soureceregion, dest, desregion,overwrite,profile,test):
+def migrate_sg(source, soureceregion, dest, desregion,overwrite,profile,test,tprofile):
     #print >>sys.stderr, source, soureceregion, dest, desregion, overwrite, test
     #boto.set_stream_logger('boto')
     conn = boto.ec2.connect_to_region(sourceregion,profile_name=profile)
@@ -124,7 +128,8 @@ def migrate_sg(source, soureceregion, dest, desregion,overwrite,profile,test):
 
     #print >>sys.stderr, repr(sg_trees)
     assert sg_trees is not None, "No SG dependency tree"
-    new_conn = boto.ec2.connect_to_region(desregion,profile_name=profile)
+    tprofile if tprofile is not None else profile
+    new_conn = boto.ec2.connect_to_region(desregion,profile_name=tprofile)
     for sgs in sg_trees:
         if sgs.name != 'default':
             create_new_sg(sgs, desregion,dest,sg_trees,new_conn)
@@ -197,7 +202,7 @@ class Usage(Exception):
 if __name__ == "__main__":
     try:
         try:
-            opts, args = getopt.getopt(sys.argv[1:], 's:d:u:r:p:xoh', ["source=","destination=","dryrun","overwrite","sourceregion=","destinationregion=","profile=","help"])
+            opts, args = getopt.getopt(sys.argv[1:], 's:d:u:r:p:t:xoh', ["source=","destination=","dryrun","overwrite","sourceregion=","destinationregion=","profile=","target-profile","help"])
         except getopt.error, msg:
              raise Usage(msg)
 
@@ -209,6 +214,7 @@ if __name__ == "__main__":
         destination = None
         overwrite = False
         dryrun = False
+        tprofile = None
 
         for option, value in opts:
             if option in ("-h", "--help"):
@@ -228,6 +234,8 @@ if __name__ == "__main__":
                 dryrun = True
             elif option in ("-o", "--overwrite"):
                 overwrite = True
+            elif option in ("-t", "--target-profile"):
+                tprofile = value
             else:
                 raise Usage('unhandled option "%s"' % option)
 
@@ -237,7 +245,7 @@ if __name__ == "__main__":
             raise Usage("invalid number of arguments")
         if destination is None:
             raise Usage("must specify vpc id as destination")
-        migrate_sg(source,sourceregion,destination, destregion,overwrite,profile,dryrun)
+        migrate_sg(source,sourceregion,destination, destregion,overwrite,profile,dryrun,tprofile)
 
     except Usage, err:
         print >>sys.stderr, err.msg
