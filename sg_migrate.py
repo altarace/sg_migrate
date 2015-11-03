@@ -117,10 +117,10 @@ def migrate_sg(source, soureceregion, dest, desregion,overwrite,profile,test):
                 found_id = sg_review.search(lost.parent)
                 if found_id:
                     break
-        if found_id:
-            found_id.dep_list.append(sgh(lost.ID,lost.name,lost.sg))
-            idx = orphans.index(lost)
-            orphans.pop(idx)
+            if found_id:
+                found_id.dep_list.append(sgh(lost.ID,lost.name,lost.sg))
+                idx = orphans.index(lost)
+                orphans.pop(idx)
 
     #print >>sys.stderr, repr(sg_trees)
     assert sg_trees is not None, "No SG dependency tree"
