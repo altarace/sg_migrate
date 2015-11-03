@@ -128,8 +128,10 @@ def migrate_sg(source, soureceregion, dest, desregion,overwrite,profile,test,tpr
 
     #print >>sys.stderr, repr(sg_trees)
     assert sg_trees is not None, "No SG dependency tree"
-    tprofile if tprofile is not None else profile
-    new_conn = boto.ec2.connect_to_region(desregion,profile_name=tprofile)
+    pprofile = profile
+    if tprofile is not None:
+        pprofile = tprofile
+    new_conn = boto.ec2.connect_to_region(desregion,profile_name=pprofile)
     for sgs in sg_trees:
         if sgs.name != 'default':
             create_new_sg(sgs, desregion,dest,sg_trees,new_conn)
